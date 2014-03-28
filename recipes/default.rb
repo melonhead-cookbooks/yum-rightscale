@@ -20,12 +20,32 @@
 
 include_recipe "yum::default"
 
+execute "clean-yum-cache" do
+  command "yum clean all"
+  action :nothing
+end
+
+execute "create-yum-cache" do
+ command "yum -q makecache"
+ action :nothing
+end
+
+ruby_block "reload-internal-yum-cache" do
+  block do
+    Chef::Provider::Package::Yum::YumCache.instance.reload
+  end
+  action :nothing
+end
+
 if platform_family?("rhel") && node['platform_version'].to_i < 6
 	file "/etc/yum.repos.d/CentOS-Base.repo" do
 		action :delete
+		notifies :run, "execute[clean-yum-cache]", :immediately
 	end
 
 	template "/etc/yum.repos.d/rightscale-repos.repo" do
 		source 'rightscale-repos.repo.erb'
+		notifies :run, "execute[create-yum-cache]", :immediately
+  		notifies :create, "ruby_block[reload-internal-yum-cache]", :immediately
 	end
 end
